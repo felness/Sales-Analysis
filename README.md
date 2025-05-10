@@ -1,7 +1,7 @@
 ### Структура проекта
 
-
 Sales-Analysis/
+```
 ├── .env
 ├── LICENSE
 ├── .gitignore
@@ -28,3 +28,4 @@ Sales-Analysis/
     ├── docker-compose.yaml
     ├── Dockerfile
     └── requirements.txt
+```
