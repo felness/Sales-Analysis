@@ -1,0 +1,6 @@
+include:
+  - 'network/docker-compose-network.yaml'
+  - 'kafka/docker-compose-kafka.yaml'
+  - 'minio/docker-compose-minio.yaml'
+  - 'mongo/docker-compose-mongo.yaml'
+  - 'postgres/docker-compose-postgres.yaml'
