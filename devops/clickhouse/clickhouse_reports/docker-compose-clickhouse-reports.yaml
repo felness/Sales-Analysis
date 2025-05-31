@@ -1,0 +1,27 @@
+services:
+  clickhouse-reports:
+    image: clickhouse/clickhouse-server:25.3
+    container_name: clickhouse-reports
+    environment:
+      - CLICKHOUSE_USER=admin
+      - CLICKHOUSE_PASSWORD=secret
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+      - CLICKHOUSE_DB=sales_db
+    ports:
+      - '8125:8123'
+      - '9004:9000'
+    volumes:
+      - clickhouse_data_reports:/var/lib/clickhouse
+      - ./init-db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - shared_network
+
+
+volumes:
+  clickhouse_data_reports:

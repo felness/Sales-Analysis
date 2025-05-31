@@ -4,3 +4,6 @@ include:
   - 'minio/docker-compose-minio.yaml'
   - 'mongo/docker-compose-mongo.yaml'
   - 'postgres/docker-compose-postgres.yaml'
+  - 'clickhouse/clickhouse_stage/docker-compose-clickhouse-stage.yaml'
+  - 'clickhouse/clickhouse_dwh/docker-compose-clickhouse-dwh.yaml'
+  - 'clickhouse/clickhouse_reports/docker-compose-clickhouse-reports.yaml'
