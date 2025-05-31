@@ -3,3 +3,4 @@ include:
   - 'postgres_service/docker-compose.yaml'
   - 'product_service/docker-compose.yaml'
   - 'sales_service/docker-compose.yaml'
+  - 'streaming_service/docker-compose.yaml'

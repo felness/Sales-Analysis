@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  streaming:
+    build:
+      context: .                
+      dockerfile: Dockerfile
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_TOPIC=sales              
+      - CLICKHOUSE_HOST=clickhouse-stage
+      - CLICKHOUSE_PORT=9002
+      - CLICKHOUSE_DATABASE=sales_db
+      - CLICKHOUSE_USER=admin
+      - CLICKHOUSE_PASSWORD=secret
+    networks:
+      - shared_network
+    depends_on:
+      - kafka         
+      - clickhouse-stage
+
+networks:
+  shared_network:
+    external: true
