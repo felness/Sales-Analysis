@@ -9,7 +9,7 @@ services:
       - CLICKHOUSE_DB=sales_db
     ports:
       - '8123:8123'
-      - '9002:9002'
+      - '9002:9000'
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./init-db/init.sql:/docker-entrypoint-initdb.d/init.sql

@@ -3,6 +3,7 @@
 import os
 import asyncio
 import json
+from datetime import datetime
 from aiokafka import AIOKafkaConsumer
 from clickhouse_driver import Client
 
@@ -11,7 +12,7 @@ KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "sales") 
 
 CLICKHOUSE_HOST = os.getenv("CLICKHOUSE_HOST", "clickhouse-stage")
-CLICKHOUSE_PORT = int(os.getenv("CLICKHOUSE_PORT", "9002"))
+CLICKHOUSE_PORT = int(os.getenv("CLICKHOUSE_PORT", "9000"))
 CLICKHOUSE_DATABASE = os.getenv("CLICKHOUSE_DATABASE", "sales_db")
 CLICKHOUSE_USER = os.getenv("CLICKHOUSE_USER", "admin")
 CLICKHOUSE_PASSWORD = os.getenv("CLICKHOUSE_PASSWORD", "secret")
@@ -35,12 +36,13 @@ async def consume_and_write_to_clickhouse():
     consumer = AIOKafkaConsumer(
         KAFKA_TOPIC,
         bootstrap_servers=KAFKA_BOOTSTRAP,
-        group_id="clickhouse_streamer_group",
+        group_id=None,
         auto_offset_reset="earliest",
         enable_auto_commit=True,
         key_deserializer=lambda k: int.from_bytes(k, "big") if k is not None else None,
         value_deserializer=lambda v: json.loads(v.decode("utf-8")) if v else None,
     )
+
     await consumer.start()
 
     client = Client(
@@ -63,6 +65,8 @@ async def consume_and_write_to_clickhouse():
                 )
                 print(f"[streamer] DELETE sale_id={sale_id} из ClickHouse")
             else:
+                sale_date = datetime.strptime(data["sale_date"], "%Y-%m-%d").date()
+                
                 client.execute(
                     """
                     INSERT INTO sales (
@@ -85,7 +89,7 @@ async def consume_and_write_to_clickhouse():
                     [
                         [
                             sale_id,
-                            data["sale_date"],        
+                            sale_date,        
                             data["customer_id"],
                             data["seller_id"],
                             data["product_id"],

@@ -9,7 +9,7 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - KAFKA_TOPIC=sales              
       - CLICKHOUSE_HOST=clickhouse-stage
-      - CLICKHOUSE_PORT=9002
+      - CLICKHOUSE_PORT=9000
       - CLICKHOUSE_DATABASE=sales_db
       - CLICKHOUSE_USER=admin
       - CLICKHOUSE_PASSWORD=secret

@@ -10,6 +10,7 @@ services:
     ports:
       - "8002:8000"
     depends_on:
-      - kafka
+      kafka: 
+        condition: service_healthy
     networks:
       - shared_network
