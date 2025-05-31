@@ -15,10 +15,3 @@ services:
       - CLICKHOUSE_PASSWORD=secret
     networks:
       - shared_network
-    depends_on:
-      - kafka         
-      - clickhouse-stage
-
-networks:
-  shared_network:
-    external: true
