@@ -1,91 +1,58 @@
-version: '3'
 
 services:
-  # PostgreSQL
-  postgres-db:
-    image: postgres:14
-    container_name: postgres-db
+  # Airflow Web Server
+  airflow-webserver:
+    build: ./airflow
+    container_name: airflow-webserver
+    restart: always
     environment:
-      POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
-      POSTGRES_DB: airflow_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # MongoDB
-  mongodb:
-    image: mongo:latest
-    container_name: mongodb
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: secret
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb-data:/data/db
-    healthcheck:
-      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ClickHouse
-  clickhouse-server:
-    image: yugabyte/clickhouse-server:latest
-    container_name: clickhouse-server
-    ports:
-      - "8123:8123"
-      - "9000:9000"
-    volumes:
-      - clickhouse-data:/var/lib/clickhouse
-    healthcheck:
-      test: ["CMD-SCRIPT", "/usr/bin/clickhouse-client", "-q", "'SELECT 1;'"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Airflow
-  airflow:
-    build:
-      context: ./airflow
-      dockerfile: Dockerfile
-    container_name: airflow
-    depends_on:
-      postgres-db:
-        condition: service_healthy
-      mongodb:
-        condition: service_healthy
-      clickhouse-server:
-        condition: service_healthy
-    environment:
-      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow_db
-    volumes:
-      - ./airflow/dags:/opt/airflow/dags
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://user:password@postgres-db/base_db
+      AIRFLOW__WEBSERVER__BASE_URL: http://localhost:8080
+      
+      # Коннекторы для MongoDB, PostgreSQL, ClickHouse и Snowflake
+      AIRFLOW_CONN_CLICKHOUSE_DEFAULT: "clickhouse://admin:secret@clickhouse/sales_db"
+      AIRFLOW_CONN_POSTGRES_DEFAULT: "postgresql+psycopg2://user:password@postgres-db/base_db"
+      AIRFLOW_CONN_MONGODB_DEFAULT: "mongo://admin:secret@mongodb/product_db"
+      AIRFLOW_CONN_SNOWFLAKE_DEFAULT: "snowflake://fltww:585123@fltwww/base?warehouse=warehouse&role=admin"
     ports:
       - "8080:8080"
-    command: webserver
-
-  airflow-scheduler:
-    build:
-      context: ./airflow
-      dockerfile: Dockerfile
-    container_name: airflow-scheduler
-    depends_on:
-      - airflow
     volumes:
       - ./airflow/dags:/opt/airflow/dags
-    command: scheduler
+      - ./airflow/plugins:/opt/airflow/plugins
+    depends_on:
+      - postgres-db
+      - clickhouse
+    networks:
+      - shared_network
+
+  # Airflow Scheduler
+  airflow-scheduler:
+    build: ./airflow
+    container_name: airflow-scheduler
+    restart: always
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://user:585123@postgres-db/your_db
+      
+      # Коннекторы для MongoDB, PostgreSQL, ClickHouse и Snowflake
+      AIRFLOW_CONN_CLICKHOUSE_DEFAULT: "clickhouse://admin:secret@clickhouse/sales_db"
+      AIRFLOW_CONN_POSTGRES_DEFAULT: "postgresql+psycopg2://your_user:password@postgres-db/base"
+      AIRFLOW_CONN_MONGODB_DEFAULT: "mongo://admin:secret@mongodb/product_db"
+      AIRFLOW_CONN_SNOWFLAKE_DEFAULT: "snowflake://<your_username>:pass@fltww/base?warehouse=warehouse&role=admin"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/plugins:/opt/airflow/plugins
+    depends_on:
+      - postgres-db
+      - clickhouse
+    networks:
+      - shared_network
+
+networks:
+  shared_network:
 
 volumes:
-  postgres-data:
-  mongodb-data:
-  clickhouse-data:
+  mongodb_data:
+  postgres_data:
+  clickhouse_data:

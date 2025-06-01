@@ -45,17 +45,7 @@ def aggregate_and_load_to_clickhouse(**context):
     
     aggregated_df = df.groupBy(col("category")).agg(sum("price").alias("total_sales"), count("*").alias("item_count"))
     
-    # Готовим таблицу в ClickHouse
     clickhouse_hook = ClickHouseHook(clickhouse_conn_id="clickhouse_default")
-    clickhouse_hook.run(f"""
-        CREATE TABLE IF NOT EXISTS postgres_aggregated (
-            category String,
-            total_sales Float64,
-            item_count UInt64
-        ) ENGINE = MergeTree ORDER BY category
-    """)
-    
-    # Записываем данные в ClickHouse
     aggregated_df.write.format("clickhouse")\
         .option("table", "postgres_aggregated")\
         .option("database", "default")\
