@@ -1,3 +1,5 @@
+version: '3'
+
 services:
   # PostgreSQL
   postgres-db:
@@ -12,38 +14,78 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U airflow -d airflow_db" ]
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow_db"]
       interval: 10s
       timeout: 5s
       retries: 5
-    # Airflow
+
+  # MongoDB
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: secret
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ClickHouse
+  clickhouse-server:
+    image: yugabyte/clickhouse-server:latest
+    container_name: clickhouse-server
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD-SCRIPT", "/usr/bin/clickhouse-client", "-q", "'SELECT 1;'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Airflow
   airflow:
-      build:
-        context: ./airflow
-        dockerfile: Dockerfile
-      container_name: airflow
-      depends_on:
-        postgres-db:
-          condition: service_healthy
-        mongodb:
-          condition: service_healthy
-      environment:
-        - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-        - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
-        - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow_db
-      volumes:
-        - ./airflow/dags:/opt/airflow/dags
-      ports:
-        - "8080:8080"
-      command: webserver
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    container_name: airflow
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      clickhouse-server:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__DAGS_FOLDER=/opt/airflow/dags
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres-db:5432/airflow_db
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+    ports:
+      - "8080:8080"
+    command: webserver
 
   airflow-scheduler:
-      build:
-        context: ./airflow
-        dockerfile: Dockerfile
-      container_name: airflow-scheduler
-      depends_on:
-        - airflow
-      volumes:
-        - ./airflow/dags:/opt/airflow/dags
-      command: scheduler
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    container_name: airflow-scheduler
+    depends_on:
+      - airflow
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+    command: scheduler
+
+volumes:
+  postgres-data:
+  mongodb-data:
+  clickhouse-data:
