@@ -1,39 +1,67 @@
 from airflow import DAG
+from airflow.providers.clickhouse.hooks.clickhouse import ClickHouseHook
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 from datetime import timedelta
 import pymongo
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import current_date
+from pyspark.sql.functions import col, sum, count, current_date
 
-default_args = {'owner': 'airflow', 'retries': 1, 'retry_delay': timedelta(minutes=5)}
+default_args = {
+    'owner': 'airflow',
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5),
+}
 
 def init_spark():
     return (SparkSession.builder
-            .appName("MongoToIceberg")
-            .config("spark.jars.packages", "org.apache.iceberg:iceberg-spark-runtime-3.3_2.12:1.3.0")
-            .config("spark.sql.catalog.iceberg", "org.apache.iceberg.spark.SparkCatalog")
-            .config("spark.sql.catalog.iceberg.type", "hadoop")
-            .config("spark.sql.catalog.iceberg.warehouse", "s3a://your-bucket/iceberg/")
+            .appName("MongoToClickHouse")
+            .config("spark.jars.packages", "org.mongodb.spark:mongo-spark-connector_2.12:3.0.1")
             .getOrCreate())
 
-def extract_mongo():
+def extract_mongo_yesterday_data():
+    yesterday = (current_date() - 1).alias('yesterday')
+    
+    # Подключение к MongoDB
     client = pymongo.MongoClient("mongodb://admin:secret@mongodb:27017/")
-    collection = client["product_db"]["your_collection"]
-    data = list(collection.find({}))
-    for d in data:
-        d["_id"] = str(d["_id"])
-    return data
+    db = client["product_db"]
+    collection = db["your_collection"]
+    
+    # Получаем данные за вчерашний день
+    yesterday_data = list(collection.find({"created_at": {"$gte": yesterday}}))
+    for doc in yesterday_data:
+        doc['_id'] = str(doc['_id'])
+    return yesterday_data
 
-def load_mongo_to_iceberg(**kwargs):
-    records = kwargs['ti'].xcom_pull(task_ids='extract_mongo')
+def aggregate_and_load_to_clickhouse(**context):
+    records = context['task_instance'].xcom_pull(task_ids='extract_mongo_yesterday_data')
+    if not records:
+        print("No new data to process.")
+        return
+        
     spark = init_spark()
     df = spark.createDataFrame(records)
-    df = df.withColumn("partition_date", current_date())
-    df.write.format("iceberg").mode("append").partitionBy("partition_date").save("iceberg.mongo_ns.product_table")
-    spark.stop()
+    
+    # Выполнение агрегаций
+    aggregated_df = df.groupBy(col("category")).agg(sum("price").alias("total_sales"), count("*").alias("item_count"))
+    
+    clickhouse_hook = ClickHouseHook(clickhouse_conn_id="clickhouse_default")
+    clickhouse_hook.run(f"""
+        CREATE TABLE IF NOT EXISTS mongo_aggregated (
+            category String,
+            total_sales Float64,
+            item_count UInt64
+        ) ENGINE = MergeTree ORDER BY category
+    """)
+    
+    # Запись в ClickHouse
+    aggregated_df.write.format("clickhouse")\
+        .option("table", "mongo_aggregated")\
+        .option("database", "default")\
+        .mode("overwrite")\
+        .save()
 
-with DAG("mongodb_to_iceberg", default_args=default_args, schedule_interval="@daily", start_date=days_ago(1), catchup=False) as dag:
-    extract = PythonOperator(task_id="extract_mongo", python_callable=extract_mongo)
-    load = PythonOperator(task_id="load_to_iceberg", python_callable=load_mongo_to_iceberg, provide_context=True)
+with DAG("mongo_to_clickhouse_batch_update", default_args=default_args, schedule_interval="@daily", start_date=days_ago(1), catchup=False) as dag:
+    extract = PythonOperator(task_id="extract_mongo_yesterday_data", python_callable=extract_mongo_yesterday_data)
+    load = PythonOperator(task_id="aggregate_and_load_to_clickhouse", python_callable=aggregate_and_load_to_clickhouse, provide_context=True)
     extract >> load
