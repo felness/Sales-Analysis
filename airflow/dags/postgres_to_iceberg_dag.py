@@ -21,26 +21,31 @@ def init_spark():
             .getOrCreate())
 
 def extract_postgres_yesterday_data():
+    """
+    Чтение данных из PostgreSQL за вчерашний день.
+    """
     yesterday = (current_date() - 1).alias('yesterday')
     
-    # Соединение с базой данных PostgreSQL
     conn = psycopg2.connect(host="postgres-db", database="your_db", user="your_user", password="your_password", port=5432)
     sql_query = f"SELECT * FROM your_table WHERE created_at >= '{yesterday}'"
     df = pd.read_sql(sql_query, conn)
     return df.to_dict(orient="records")
 
 def aggregate_and_load_to_clickhouse(**context):
+    """
+    Агрегируем полученные данные и записываем их в ClickHouse.
+    """
     records = context['task_instance'].xcom_pull(task_ids='extract_postgres_yesterday_data')
     if not records:
-        print("No new data to process.")
+        print("Нет новых данных для обработки.")
         return
         
     spark = init_spark()
     df = spark.createDataFrame(records)
     
-    # Выполнение агрегаций
     aggregated_df = df.groupBy(col("category")).agg(sum("price").alias("total_sales"), count("*").alias("item_count"))
     
+    # Готовим таблицу в ClickHouse
     clickhouse_hook = ClickHouseHook(clickhouse_conn_id="clickhouse_default")
     clickhouse_hook.run(f"""
         CREATE TABLE IF NOT EXISTS postgres_aggregated (
@@ -50,7 +55,7 @@ def aggregate_and_load_to_clickhouse(**context):
         ) ENGINE = MergeTree ORDER BY category
     """)
     
-    # Запись в ClickHouse
+    # Записываем данные в ClickHouse
     aggregated_df.write.format("clickhouse")\
         .option("table", "postgres_aggregated")\
         .option("database", "default")\
