@@ -21,9 +21,7 @@ def init_spark():
             .getOrCreate())
 
 def extract_postgres_yesterday_data():
-    """
-    Чтение данных из PostgreSQL за вчерашний день.
-    """
+
     yesterday = (current_date() - 1).alias('yesterday')
     
     conn = psycopg2.connect(host="postgres-db", database="your_db", user="your_user", password="your_password", port=5432)
@@ -32,9 +30,7 @@ def extract_postgres_yesterday_data():
     return df.to_dict(orient="records")
 
 def aggregate_and_load_to_clickhouse(**context):
-    """
-    Агрегируем полученные данные и записываем их в ClickHouse.
-    """
+
     records = context['task_instance'].xcom_pull(task_ids='extract_postgres_yesterday_data')
     if not records:
         print("Нет новых данных для обработки.")

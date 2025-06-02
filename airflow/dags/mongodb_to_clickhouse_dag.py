@@ -20,26 +20,19 @@ def init_spark():
             .getOrCreate())
 
 def extract_mongo_yesterday_data():
-    """
-    Выбираем только записи за вчерашний день из MongoDB.
-    """
     yesterday = (current_date() - 1).alias('yesterday')
     
-    # Подключаемся к MongoDB
     client = pymongo.MongoClient("mongodb://admin:secret@mongodb:27017/")
     db = client["product_db"]
     collection = db["your_collection"]
     
-    # Фильтруем данные за вчерашний день
     yesterday_data = list(collection.find({"created_at": {"$gte": yesterday}}))
     for doc in yesterday_data:
         doc['_id'] = str(doc['_id'])
     return yesterday_data
 
 def aggregate_and_load_to_clickhouse(**context):
-    """
-    Собираем данные за вчерашний день, создаём агрегаты и сохраняем в ClickHouse.
-    """
+
     records = context['task_instance'].xcom_pull(task_ids='extract_mongo_yesterday_data')
     if not records:
         print("Нет новых данных для обработки.")
@@ -48,20 +41,9 @@ def aggregate_and_load_to_clickhouse(**context):
     spark = init_spark()
     df = spark.createDataFrame(records)
     
-    # Выполняем агрегацию (например, считаем сумму продаж и количество товаров по категориям)
     aggregated_df = df.groupBy(col("category")).agg(sum("price").alias("total_sales"), count("*").alias("item_count"))
     
-    # Используем ClickHouse hook для сохранения результата
     clickhouse_hook = ClickHouseHook(clickhouse_conn_id="clickhouse_default")
-    clickhouse_hook.run(f"""
-        CREATE TABLE IF NOT EXISTS mongo_aggregated (
-            category String,
-            total_sales Float64,
-            item_count UInt64
-        ) ENGINE = MergeTree ORDER BY category
-    """)
-    
-    # Пишем агрегированную таблицу в ClickHouse
     aggregated_df.write.format("clickhouse")\
         .option("table", "mongo_aggregated")\
         .option("database", "default")\
