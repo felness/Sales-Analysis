@@ -24,8 +24,8 @@ def extract_postgres_yesterday_data():
 
     yesterday = (current_date() - 1).alias('yesterday')
     
-    conn = psycopg2.connect(host="postgres-db", database="your_db", user="your_user", password="your_password", port=5432)
-    sql_query = f"SELECT * FROM your_table WHERE created_at >= '{yesterday}'"
+    conn = psycopg2.connect(host="postgres-db", database="base", user="user", password="password", port=5432)
+    sql_query = f"SELECT * FROM sales WHERE created_at >= '{yesterday}'"
     df = pd.read_sql(sql_query, conn)
     return df.to_dict(orient="records")
 
